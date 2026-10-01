@@ -29,7 +29,6 @@ INJECTION_PATTERNS = [
 ]
 _INJECTION_RE = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in INJECTION_PATTERNS]
 
-
 def check_prompt_injection(tool: ToolInfo) -> list[Finding]:
     text = _all_text(tool)
     findings = []
@@ -41,7 +40,7 @@ def check_prompt_injection(tool: ToolInfo) -> list[Finding]:
                     rule_id="MCP001",
                     severity=Severity.HIGH,
                     tool=tool.name,
-                    message="The text contains instructions directed at the model (possible injection)",
+                    message="Text contains instructions aimed at the model (possible prompt injection)",
                     evidence=match.group(0)[:120],
                 )
             )
@@ -60,7 +59,7 @@ def check_hidden_characters(tool: ToolInfo) -> list[Finding]:
             rule_id="MCP002",
             severity=Severity.HIGH,
             tool=tool.name,
-            message="It contains invisible Unicode characters that can hide text",
+            message="Contains invisible Unicode characters that can hide text",
             evidence=codes,
         )
     ]
@@ -70,7 +69,6 @@ def check_hidden_characters(tool: ToolInfo) -> list[Finding]:
 
 COMMAND_NAME_TOKENS = {"exec", "execute", "shell", "eval", "bash", "command", "cmd"}
 COMMAND_PARAM_NAMES = {"command", "cmd", "shell", "script", "exec", "bash", "code", "eval"}
-
 
 def check_command_execution(tool: ToolInfo) -> list[Finding]:
     reasons = []
@@ -87,7 +85,7 @@ def check_command_execution(tool: ToolInfo) -> list[Finding]:
             rule_id="MCP003",
             severity=Severity.HIGH,
             tool=tool.name,
-            message="Possible execution of arbitrary commands or code",
+            message="Possible arbitrary command or code execution",
             evidence=", ".join(reasons),
         )
     ]
@@ -96,7 +94,6 @@ def check_command_execution(tool: ToolInfo) -> list[Finding]:
 # MCP004: Unrestricted file paths
 
 PATH_PARAM_NAMES = {"path", "file", "filepath", "file_path", "filename", "directory", "dir", "folder"}
-
 
 def check_unrestricted_path(tool: ToolInfo) -> list[Finding]:
     findings = []
@@ -123,20 +120,18 @@ SECRET_PARAM_RE = re.compile(
     r"(password|passwd|secret|token|api[_-]?key|credential|private[_-]?key)", re.IGNORECASE
 )
 
-
 def check_secrets_in_parameters(tool: ToolInfo) -> list[Finding]:
     return [
         Finding(
             rule_id="MCP005",
             severity=Severity.MEDIUM,
             tool=tool.name,
-            message="It asks for credentials as an argument: this would be based on the model's context and the logs",
+            message="Asks for a credential as an argument: it would travel through the model context and logs",
             evidence=pname,
         )
         for pname in tool.parameters
         if SECRET_PARAM_RE.search(pname)
     ]
-
 
 ALL_RULES: list[Rule] = [
     check_prompt_injection,
@@ -144,4 +139,121 @@ ALL_RULES: list[Rule] = [
     check_command_execution,
     check_unrestricted_path,
     check_secrets_in_parameters,
+]
+
+
+# MCP006: unrestricted URL parameters (SSRF / exfiltration)
+
+URL_PARAM_NAMES = {"url", "uri", "webhook", "endpoint", "callback", "callback_url", "webhook_url", "base_url"}
+
+def check_unrestricted_url(tool: ToolInfo) -> list[Finding]:
+    findings = []
+    for pname, schema in tool.parameters.items():
+        if pname.lower() not in URL_PARAM_NAMES or schema.get("type") != "string":
+            continue
+        if any(key in schema for key in ("enum", "pattern", "const")):
+            continue
+        findings.append(
+            Finding(
+                rule_id="MCP006",
+                severity=Severity.MEDIUM,
+                tool=tool.name,
+                message="Unrestricted URL parameter: risk of SSRF or sending data to arbitrary hosts",
+                evidence=pname,
+            )
+        )
+    return findings
+
+
+# MCP007: missing or meaningless description
+
+MIN_DESCRIPTION_CHARS = 15
+
+def check_missing_description(tool: ToolInfo) -> list[Finding]:
+    if len(tool.description.strip()) >= MIN_DESCRIPTION_CHARS:
+        return []
+    return [
+        Finding(
+            rule_id="MCP007",
+            severity=Severity.LOW,
+            tool=tool.name,
+            message="Tool has no meaningful description: models may misuse it and reviewers cannot assess it",
+            evidence=repr(tool.description),
+        )
+    ]
+
+
+# MCP008: destructive operations
+
+DESTRUCTIVE_NAME_TOKENS = {
+    "delete", "remove", "drop", "truncate", "destroy", "wipe", "erase", "kill", "format", "purge",
+}
+
+def check_destructive_tool(tool: ToolInfo) -> list[Finding]:
+    tokens = set(re.split(r"[_\-\s]+", tool.name.lower()))
+    hits = tokens & DESTRUCTIVE_NAME_TOKENS
+    if not hits:
+        return []
+    return [
+        Finding(
+            rule_id="MCP008",
+            severity=Severity.MEDIUM,
+            tool=tool.name,
+            message="Destructive operation exposed to the model: require human confirmation before it runs",
+            evidence=", ".join(sorted(hits)),
+        )
+    ]
+
+
+# MCP009: raw SQL as input
+
+SQL_PARAM_NAMES = {"sql", "query", "statement", "raw_query"}
+SQL_HINTS = ("sql", "database", "postgres", "mysql", "sqlite")
+
+def check_raw_sql(tool: ToolInfo) -> list[Finding]:
+    description = tool.description.lower()
+    if not any(hint in description for hint in SQL_HINTS):
+        return []
+    return [
+        Finding(
+            rule_id="MCP009",
+            severity=Severity.HIGH,
+            tool=tool.name,
+            message="Accepts raw SQL from the model: risk of data leaks, injection or destructive queries",
+            evidence=pname,
+        )
+        for pname in tool.parameters
+        if pname.lower() in SQL_PARAM_NAMES
+    ]
+
+
+# MCP010: oversized description
+
+MAX_DESCRIPTION_CHARS = 1500
+
+def check_oversized_description(tool: ToolInfo) -> list[Finding]:
+    size = len(tool.description)
+    if size <= MAX_DESCRIPTION_CHARS:
+        return []
+    return [
+        Finding(
+            rule_id="MCP010",
+            severity=Severity.LOW,
+            tool=tool.name,
+            message="Very long description: long texts can hide instructions from reviewers",
+            evidence=f"{size} characters",
+        )
+    ]
+
+ALL_RULES: list[Rule] = [
+    check_prompt_injection,
+    check_hidden_characters,
+    check_command_execution,
+    check_unrestricted_path,
+    check_secrets_in_parameters,
+    check_unrestricted_url,
+    check_missing_description,
+    check_destructive_tool,
+    check_raw_sql,
+    check_oversized_description,
 ]

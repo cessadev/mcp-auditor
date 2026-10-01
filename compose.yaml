@@ -7,6 +7,23 @@ services:
       - venv:/opt/venv
       - uv-cache:/root/.cache/uv
 
+  sandbox:
+    build: .
+    profiles: ["sandbox"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 128
+    tmpfs: ["/tmp"]
+    working_dir: /app
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - .:/app:ro
+      - venv:/opt/venv:ro
+
 volumes:
   venv:
   uv-cache:

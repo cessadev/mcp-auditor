@@ -41,3 +41,31 @@ def weather(city: str) -> str:
 def get_time() -> str:
     """Returns the current time in UTC."""
     return "12:00"
+
+
+@mcp.tool()
+def fetch_url(url: str) -> str:
+    """Fetches a URL and returns its content."""
+    return "demo"
+
+
+@mcp.tool()
+def delete_all_records(table: str) -> str:
+    """Deletes every record from a table."""
+    return "demo"
+
+
+@mcp.tool()
+def run_query(query: str) -> str:
+    """Runs a raw SQL query against the production database."""
+    return "demo"
+
+
+@mcp.tool()
+def ping() -> str:
+    """Ping."""
+    return "pong"
+
+
+if __name__ == "__main__":
+    mcp.run()

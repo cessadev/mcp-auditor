@@ -2,10 +2,15 @@ from mcp_auditor.engine import audit_tools
 from mcp_auditor.models import ToolInfo
 from mcp_auditor.rules import (
     check_command_execution,
+    check_destructive_tool,
     check_hidden_characters,
+    check_missing_description,
+    check_oversized_description,
     check_prompt_injection,
+    check_raw_sql,
     check_secrets_in_parameters,
     check_unrestricted_path,
+    check_unrestricted_url,
 )
 
 
@@ -44,3 +49,24 @@ def test_path_with_enum_is_not_flagged():
         input_schema={"properties": {"path": {"type": "string", "enum": ["a.txt", "b.txt"]}}},
     )
     assert check_unrestricted_path(tool) == []
+
+
+def test_detects_unrestricted_url(demo_tools):
+    assert ids(check_unrestricted_url(demo_tools["fetch_url"])) == {"MCP006"}
+
+
+def test_detects_missing_description(demo_tools):
+    assert ids(check_missing_description(demo_tools["ping"])) == {"MCP007"}
+
+
+def test_detects_destructive_tool(demo_tools):
+    assert ids(check_destructive_tool(demo_tools["delete_all_records"])) == {"MCP008"}
+
+
+def test_detects_raw_sql(demo_tools):
+    assert ids(check_raw_sql(demo_tools["run_query"])) == {"MCP009"}
+
+
+def test_detects_oversized_description():
+    tool = ToolInfo(name="verbose", description="word " * 400)
+    assert ids(check_oversized_description(tool)) == {"MCP010"}
