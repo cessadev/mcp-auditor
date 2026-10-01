@@ -4,8 +4,8 @@ import shlex
 import sys
 from pathlib import Path
 
-from mcp_auditor.cli import main
-from mcp_auditor.scanner import fetch_tools_from_stdio
+from mcp_toolcheck.cli import main
+from mcp_toolcheck.scanner import fetch_tools_from_stdio
 
 SERVER = Path(__file__).parent / "fixtures" / "vulnerable_server.py"
 COMMAND = f"{shlex.quote(sys.executable)} {shlex.quote(str(SERVER))}"
@@ -50,3 +50,24 @@ def test_clean_tools_file_exits_0(tmp_path, capsys):
 
 def test_unreadable_server_exits_2(capsys):
     assert main(["scan", "--command", "this-command-does-not-exist"]) == 2
+
+
+def test_cli_groups_repeated_findings(tmp_path, capsys):
+    tools = [
+        {"name": f"git_{n}", "description": "Runs a git operation on a repository.",
+         "inputSchema": {"type": "object", "properties": {"repo_path": {"type": "string"}}}}
+        for n in ("add", "diff", "commit")
+    ]
+    tools_file = tmp_path / "tools.json"
+    tools_file.write_text(json.dumps(tools))
+    main(["scan", "--tools-file", str(tools_file), "--fail-on", "never"])
+    out = capsys.readouterr().out
+    assert out.count("MCP004") == 1
+    assert "tools (3)" in out
+
+
+def test_cli_markdown_output(capsys):
+    main(["scan", "--command", COMMAND, "--format", "markdown", "--fail-on", "never"])
+    out = capsys.readouterr().out
+    assert out.startswith("## MCP audit report")
+    assert "| high | MCP003 |" in out

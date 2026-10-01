@@ -1,6 +1,6 @@
-from mcp_auditor.engine import audit_tools
-from mcp_auditor.models import ToolInfo
-from mcp_auditor.rules import (
+from mcp_toolcheck.engine import audit_tools
+from mcp_toolcheck.models import ToolInfo
+from mcp_toolcheck.rules import (
     check_command_execution,
     check_destructive_tool,
     check_hidden_characters,

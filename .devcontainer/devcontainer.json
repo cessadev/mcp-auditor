@@ -1,5 +1,5 @@
 {
-  "name": "mcp-auditor",
+  "name": "mcp-toolcheck",
   "dockerComposeFile": ["../compose.yaml"],
   "service": "dev",
   "workspaceFolder": "/app",

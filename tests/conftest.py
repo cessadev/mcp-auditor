@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_auditor.models import ToolInfo
+from mcp_toolcheck.models import ToolInfo
 
 FIXTURE = Path(__file__).parent / "fixtures" / "vulnerable_server.py"
 

@@ -25,7 +25,12 @@ INJECTION_PATTERNS = [
     r"<\s*important\s*>",
     r"before (using|calling|running) this tool.{0,80}(read|send|include|fetch)",
     r"(read|cat|open|send).{0,40}(~/\.ssh|id_rsa|\.env|/etc/passwd)",
-    r"system prompt",
+    r"(reveal|print|show|leak|send|exfiltrate).{0,30}system prompt",
+    r"(ignore|override|disregard).{0,40}system prompt",
+    # Spanish
+    r"ignora\w*\s+(todas\s+)?(las\s+)?(instrucciones|indicaciones)\s+(anteriores|previas)",
+    r"no\s+(le\s+)?(digas|cuentes|menciones|informes|reveles).{0,40}usuario",
+    r"antes de (usar|llamar|ejecutar) esta herramienta.{0,80}(lee|envía|envia|incluye|obtén|obten)",
 ]
 _INJECTION_RE = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in INJECTION_PATTERNS]
 
@@ -65,16 +70,21 @@ def check_hidden_characters(tool: ToolInfo) -> list[Finding]:
 
 # MCP003: Execution of commands or arbitrary code
 
-COMMAND_NAME_TOKENS = {"exec", "execute", "shell", "eval", "bash", "command", "cmd"}
-COMMAND_PARAM_NAMES = {"command", "cmd", "shell", "script", "exec", "bash", "code", "eval"}
+COMMAND_NAME_TOKENS = {"exec", "shell", "eval", "bash", "command", "cmd"}
+STRONG_COMMAND_PARAMS = {"command", "cmd", "shell", "script", "exec", "bash", "eval"}
+WEAK_COMMAND_PARAMS = {"code"}
+_RUNS_CODE_RE = re.compile(r"\b(run|runs|execut\w*|eval\w*|interpret\w*|shell|bash)\b", re.IGNORECASE)
+
 
 def check_command_execution(tool: ToolInfo) -> list[Finding]:
     reasons = []
     name_tokens = set(re.split(r"[_\-\s]+", tool.name.lower()))
     if name_tokens & COMMAND_NAME_TOKENS:
         reasons.append(f"tool name '{tool.name}'")
+    runs_code = bool(_RUNS_CODE_RE.search(f"{tool.name.replace('_', ' ')} {tool.description}"))
     for pname in tool.parameters:
-        if pname.lower() in COMMAND_PARAM_NAMES:
+        lowered = pname.lower()
+        if lowered in STRONG_COMMAND_PARAMS or (lowered in WEAK_COMMAND_PARAMS and runs_code):
             reasons.append(f"parameter '{pname}'")
     if not reasons:
         return []
@@ -92,13 +102,18 @@ def check_command_execution(tool: ToolInfo) -> list[Finding]:
 # MCP004: Unrestricted file paths
 
 PATH_PARAM_NAMES = {"path", "file", "filepath", "file_path", "filename", "directory", "dir", "folder"}
+PATH_SUFFIXES = {"path", "file", "filename", "dir", "directory", "folder"}
+
+def _looks_like_path(pname: str) -> bool:
+    lowered = pname.lower()
+    return lowered in PATH_PARAM_NAMES or re.split(r"[_\-]", lowered)[-1] in PATH_SUFFIXES
 
 def check_unrestricted_path(tool: ToolInfo) -> list[Finding]:
     findings = []
     for pname, schema in tool.parameters.items():
         if pname.lower() not in PATH_PARAM_NAMES or schema.get("type") != "string":
             continue
-        if any(key in schema for key in ("enum", "pattern", "const")):
+        if not _looks_like_path(pname) or schema.get("type") != "string":
             continue
         findings.append(
             Finding(
@@ -118,6 +133,11 @@ SECRET_PARAM_RE = re.compile(
     r"(password|passwd|secret|token|api[_-]?key|credential|private[_-]?key)", re.IGNORECASE
 )
 
+_NOT_A_SECRET_RE = re.compile(
+    r"((max|min|num|total|prompt|completion|input|output)[_-]?tokens?|tokens?[_-]?(limit|count|budget))",
+    re.IGNORECASE,
+)
+
 def check_secrets_in_parameters(tool: ToolInfo) -> list[Finding]:
     return [
         Finding(
@@ -128,7 +148,7 @@ def check_secrets_in_parameters(tool: ToolInfo) -> list[Finding]:
             evidence=pname,
         )
         for pname in tool.parameters
-        if SECRET_PARAM_RE.search(pname)
+        if SECRET_PARAM_RE.search(pname) and not _NOT_A_SECRET_RE.search(pname)
     ]
 
 
@@ -157,10 +177,10 @@ def check_unrestricted_url(tool: ToolInfo) -> list[Finding]:
 
 # MCP007: missing or meaningless description
 
-MIN_DESCRIPTION_CHARS = 15
+MIN_DESCRIPTION_WORDS = 2
 
 def check_missing_description(tool: ToolInfo) -> list[Finding]:
-    if len(tool.description.strip()) >= MIN_DESCRIPTION_CHARS:
+    if len(tool.description.split()) >= MIN_DESCRIPTION_WORDS:
         return []
     return [
         Finding(
@@ -175,13 +195,18 @@ def check_missing_description(tool: ToolInfo) -> list[Finding]:
 
 # MCP008: destructive operations
 
-DESTRUCTIVE_NAME_TOKENS = {
-    "delete", "remove", "drop", "truncate", "destroy", "wipe", "erase", "kill", "format", "purge",
-}
+DESTRUCTIVE_NAME_TOKENS = {"delete", "drop", "truncate", "destroy", "wipe", "erase", "kill", "purge"}
+AMBIGUOUS_DESTRUCTIVE_TOKENS = {"remove"}
+_LOSS_HINT_RE = re.compile(
+    r"\b(permanent\w*|all|every|records?|users?|accounts?|database|tables?|files?|data)\b", re.IGNORECASE
+)
+
 
 def check_destructive_tool(tool: ToolInfo) -> list[Finding]:
     tokens = set(re.split(r"[_\-\s]+", tool.name.lower()))
     hits = tokens & DESTRUCTIVE_NAME_TOKENS
+    if tokens & AMBIGUOUS_DESTRUCTIVE_TOKENS and _LOSS_HINT_RE.search(tool.description):
+        hits |= tokens & AMBIGUOUS_DESTRUCTIVE_TOKENS
     if not hits:
         return []
     return [

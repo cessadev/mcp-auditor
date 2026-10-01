@@ -7,6 +7,16 @@ services:
       - venv:/opt/venv
       - uv-cache:/root/.cache/uv
 
+  # Phase 1 of auditing third-party servers: has network, only installs wheels into /targets
+  prepare:
+    build: .
+    profiles: ["prepare"]
+    working_dir: /targets
+    volumes:
+      - targets:/targets
+      - uv-cache:/root/.cache/uv
+
+  # Phase 2: no network, read-only, runs and audits the prepared server
   sandbox:
     build: .
     profiles: ["sandbox"]
@@ -23,7 +33,9 @@ services:
     volumes:
       - .:/app:ro
       - venv:/opt/venv:ro
+      - targets:/targets:ro
 
 volumes:
   venv:
   uv-cache:
+  targets:

@@ -1,15 +1,30 @@
 [project]
-name = "mcp-auditor"
+name = "mcp-toolcheck"
 version = "0.1.0"
 description = "Static security auditor for MCP (Model Context Protocol) servers."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "cessadev" }]
 requires-python = ">=3.10"
+keywords = ["mcp", "model-context-protocol", "security", "llm-security", "prompt-injection", "static-analysis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
 dependencies = [
     "mcp<2",
 ]
 
+[project.urls]
+Homepage = "https://github.com/cessadev/mcp-toolcheck"
+Issues = "https://github.com/cessadev/mcp-toolcheck/issues"
+
 [project.scripts]
-mcp-auditor = "mcp_auditor.cli:main"
+mcp-toolcheck = "mcp_toolcheck.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]

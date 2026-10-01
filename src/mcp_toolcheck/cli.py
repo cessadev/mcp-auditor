@@ -6,7 +6,7 @@ import sys
 
 from .engine import audit_tools
 from .models import Severity
-from .report import render_json, render_text
+from .report import render_json, render_markdown, render_text
 from .scanner import fetch_tools_from_stdio, load_tools_from_file
 
 _LEVELS = {"low": 1, "medium": 2, "high": 3}
@@ -15,7 +15,7 @@ _SEVERITY_LEVEL = {Severity.LOW: 1, Severity.MEDIUM: 2, Severity.HIGH: 3}
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mcp-auditor",
+        prog="mcp-toolcheck",
         description="Static security auditor for MCP servers.",
     )
     sub = parser.add_subparsers(dest="action", required=True)
@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     source = scan.add_mutually_exclusive_group(required=True)
     source.add_argument("--command", help='Command that starts a stdio MCP server, e.g. "python server.py"')
     source.add_argument("--tools-file", help="JSON file with a saved tool list (nothing is executed)")
-    scan.add_argument("--format", choices=["text", "json"], default="text")
+    scan.add_argument("--format", choices=["text", "json", "markdown"], default="text")
     scan.add_argument(
         "--fail-on",
         choices=["low", "medium", "high", "never"],
@@ -47,10 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     findings = audit_tools(tools)
-    if args.format == "json":
-        print(render_json(findings, len(tools)))
-    else:
-        print(render_text(findings, len(tools)))
+    renderers = {"text": render_text, "json": render_json, "markdown": render_markdown}
+    print(renderers[args.format](findings, len(tools)))
 
     if args.fail_on != "never":
         threshold = _LEVELS[args.fail_on]
