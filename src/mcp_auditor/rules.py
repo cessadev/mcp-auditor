@@ -31,20 +31,18 @@ _INJECTION_RE = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in INJECTION_PAT
 
 def check_prompt_injection(tool: ToolInfo) -> list[Finding]:
     text = _all_text(tool)
-    findings = []
-    for regex in _INJECTION_RE:
-        match = regex.search(text)
-        if match:
-            findings.append(
-                Finding(
-                    rule_id="MCP001",
-                    severity=Severity.HIGH,
-                    tool=tool.name,
-                    message="Text contains instructions aimed at the model (possible prompt injection)",
-                    evidence=match.group(0)[:120],
-                )
-            )
-    return findings
+    matches = [m.group(0)[:80] for regex in _INJECTION_RE if (m := regex.search(text))]
+    if not matches:
+        return []
+    return [
+        Finding(
+            rule_id="MCP001",
+            severity=Severity.HIGH,
+            tool=tool.name,
+            message="Text contains instructions aimed at the model (possible prompt injection)",
+            evidence=" | ".join(matches),
+        )
+    ]
 
 
 # MCP002: Invisible Unicode characters
@@ -74,10 +72,10 @@ def check_command_execution(tool: ToolInfo) -> list[Finding]:
     reasons = []
     name_tokens = set(re.split(r"[_\-\s]+", tool.name.lower()))
     if name_tokens & COMMAND_NAME_TOKENS:
-        reasons.append(f"nombre '{tool.name}'")
+        reasons.append(f"tool name '{tool.name}'")
     for pname in tool.parameters:
         if pname.lower() in COMMAND_PARAM_NAMES:
-            reasons.append(f"parámetro '{pname}'")
+            reasons.append(f"parameter '{pname}'")
     if not reasons:
         return []
     return [
@@ -132,14 +130,6 @@ def check_secrets_in_parameters(tool: ToolInfo) -> list[Finding]:
         for pname in tool.parameters
         if SECRET_PARAM_RE.search(pname)
     ]
-
-ALL_RULES: list[Rule] = [
-    check_prompt_injection,
-    check_hidden_characters,
-    check_command_execution,
-    check_unrestricted_path,
-    check_secrets_in_parameters,
-]
 
 
 # MCP006: unrestricted URL parameters (SSRF / exfiltration)
