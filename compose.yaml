@@ -1,0 +1,12 @@
+services:
+  dev:
+    build: .
+    command: sleep infinity
+    volumes:
+      - .:/app
+      - venv:/opt/venv
+      - uv-cache:/root/.cache/uv
+
+volumes:
+  venv:
+  uv-cache:
