@@ -111,9 +111,9 @@ def _looks_like_path(pname: str) -> bool:
 def check_unrestricted_path(tool: ToolInfo) -> list[Finding]:
     findings = []
     for pname, schema in tool.parameters.items():
-        if pname.lower() not in PATH_PARAM_NAMES or schema.get("type") != "string":
-            continue
         if not _looks_like_path(pname) or schema.get("type") != "string":
+            continue
+        if any(key in schema for key in ("enum", "pattern", "const")):
             continue
         findings.append(
             Finding(
