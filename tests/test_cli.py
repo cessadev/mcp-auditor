@@ -71,3 +71,31 @@ def test_cli_markdown_output(capsys):
     out = capsys.readouterr().out
     assert out.startswith("## MCP audit report")
     assert "| high | MCP003 |" in out
+
+
+def test_closing_the_pipe_early_is_not_an_error(tmp_path):
+    """`mcp-toolcheck ... | head -1` must not print a traceback or change the exit code."""
+    import subprocess
+
+    tools = [
+        {"name": f"run_shell_{i}", "description": "Runs a command in the system shell.",
+         "inputSchema": {"type": "object", "properties": {"command": {"type": "string"}}}}
+        for i in range(3000)
+    ]
+    tools_file = tmp_path / "big.json"
+    tools_file.write_text(json.dumps(tools))
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "mcp_toolcheck.cli", "scan", "--tools-file", str(tools_file),
+         "--format", "json", "--fail-on", "never"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    proc.stdout.readline()
+    proc.stdout.close()
+    stderr = proc.stderr.read()
+    proc.stderr.close()
+    code = proc.wait(timeout=30)
+
+    assert stderr == b""
+    assert code == 0

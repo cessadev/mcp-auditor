@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 
 from .engine import audit_tools
@@ -11,6 +12,16 @@ from .scanner import fetch_tools_from_stdio, load_tools_from_file
 
 _LEVELS = {"low": 1, "medium": 2, "high": 3}
 _SEVERITY_LEVEL = {Severity.LOW: 1, Severity.MEDIUM: 2, Severity.HIGH: 3}
+
+
+def _print_safely(text: str) -> None:
+    """Print the report, tolerating a reader that closes the pipe early (`| head`, `| less`)."""
+    try:
+        print(text)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -48,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
 
     findings = audit_tools(tools)
     renderers = {"text": render_text, "json": render_json, "markdown": render_markdown}
-    print(renderers[args.format](findings, len(tools)))
+    _print_safely(renderers[args.format](findings, len(tools)))
 
     if args.fail_on != "never":
         threshold = _LEVELS[args.fail_on]
