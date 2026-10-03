@@ -8,7 +8,7 @@ import sys
 from .engine import audit_tools
 from .models import Severity
 from .report import render_json, render_markdown, render_text
-from .scanner import fetch_tools_from_stdio, load_tools_from_file
+from .scanner import ScanError, fetch_tools_from_stdio, load_tools_from_file
 
 _LEVELS = {"low": 1, "medium": 2, "high": 3}
 _SEVERITY_LEVEL = {Severity.LOW: 1, Severity.MEDIUM: 2, Severity.HIGH: 3}
@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     source = scan.add_mutually_exclusive_group(required=True)
     source.add_argument("--command", help='Command that starts a stdio MCP server, e.g. "python server.py"')
     source.add_argument("--tools-file", help="JSON file with a saved tool list (nothing is executed)")
+    scan.add_argument("--timeout", type=float, default=30.0, help="Seconds to wait for the server handshake (default: 30)")
     scan.add_argument("--format", choices=["text", "json", "markdown"], default="text")
     scan.add_argument(
         "--fail-on",
@@ -52,7 +53,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.tools_file:
             tools = load_tools_from_file(args.tools_file)
         else:
-            tools = asyncio.run(fetch_tools_from_stdio(args.command))
+            tools = asyncio.run(fetch_tools_from_stdio(args.command, timeout=args.timeout))
+    except ScanError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     except Exception as exc:
         print(f"error: could not read tools: {exc}", file=sys.stderr)
         return 2

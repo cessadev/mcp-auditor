@@ -99,3 +99,41 @@ def test_closing_the_pipe_early_is_not_an_error(tmp_path):
 
     assert stderr == b""
     assert code == 0
+
+
+def test_missing_mcp_module_gets_a_clear_message(capsys):
+    """A Python without the `mcp` package must not surface as 'unhandled errors in a TaskGroup'."""
+    # `-S` skips site-packages, so this interpreter cannot import `mcp` (same symptom as a bare Python)
+    code = main(["scan", "--command", shlex.join([sys.executable, "-S", str(SERVER)])])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "Python module 'mcp' is not installed" in err
+    assert "pip install 'mcp<2'" in err
+    assert "ModuleNotFoundError" in err
+    assert "TaskGroup" not in err
+
+
+def test_server_that_exits_immediately_shows_its_output(capsys):
+    command = shlex.join([sys.executable, "-c", "import sys; print('boom', file=sys.stderr); sys.exit(3)"])
+    code = main(["scan", "--command", command])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "ended before finishing the MCP handshake" in err
+    assert "boom" in err
+    assert "TaskGroup" not in err
+
+
+def test_command_not_found_message(capsys):
+    code = main(["scan", "--command", "this-command-does-not-exist"])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "command not found: 'this-command-does-not-exist'" in err
+
+
+def test_server_that_never_answers_times_out_with_a_message(capsys):
+    command = shlex.join([sys.executable, "-c", "import time; time.sleep(60)"])
+    code = main(["scan", "--command", command, "--timeout", "2"])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "did not finish the MCP handshake within 2 seconds" in err
+    assert "--timeout" in err
