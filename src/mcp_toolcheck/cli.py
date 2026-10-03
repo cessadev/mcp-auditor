@@ -27,7 +27,7 @@ def _print_safely(text: str) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mcp-toolcheck",
-        description="Static security auditor for MCP servers.",
+        description="Static security checker for MCP servers.",
     )
     sub = parser.add_subparsers(dest="action", required=True)
 

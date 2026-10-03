@@ -1,6 +1,6 @@
 """A deliberately problematic MCP server, for testing purposes only.
 
-Functions don't actually do anything: the auditor simply reads their definitions.
+Functions don't actually do anything: the checker simply reads their definitions.
 """
 from mcp.server.fastmcp import FastMCP
 

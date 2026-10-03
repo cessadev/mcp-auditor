@@ -39,6 +39,7 @@ tool triggered which rule, with the evidence.
 - [Where mcp-toolcheck fits](#where-mcp-toolcheck-fits)
 - [Limitations](#limitations)
 - [Contributing: add your own rule](#contributing-add-your-own-rule)
+- [Responsible use](#responsible-use)
 - [License](#license)
 
 ## Quick start (5 minutes)
@@ -108,8 +109,7 @@ The file is a list of tools. Each tool has a `name`, a `description` and an `inp
 mcp-toolcheck scan --tools-file tools.json
 ```
 
-If you have a server you trust and want to generate that file automatically, save this as
-`dump_tools.py` and run it with the Python that has the `mcp` package installed:
+`dump_tools.py`:
 
 ```python
 import asyncio
@@ -118,7 +118,7 @@ import sys
 
 from mcp_toolcheck.scanner import fetch_tools_from_stdio
 
-# Use the same Python that runs this script: it has the `mcp` package installed.
+# Uses the same Python that runs this script (see how to run it below)
 command = f"{sys.executable} my_server.py"   # <- put your server here
 tools = asyncio.run(fetch_tools_from_stdio(command))
 
@@ -130,6 +130,16 @@ with open("tools.json", "w", encoding="utf-8") as f:
     )
 print(f"Saved {len(tools)} tools to tools.json")
 ```
+
+Run it with `uv`, which installs mcp-toolcheck (and the `mcp` package it needs) just for this run:
+
+```bash
+uv run --with git+https://github.com/cessadev/mcp-toolcheck python dump_tools.py
+```
+
+If your server needs other packages, install mcp-toolcheck inside **your server's own** virtual environment
+(`pip install git+https://github.com/cessadev/mcp-toolcheck`) and run `python dump_tools.py` with that
+environment active.
 
 ### Option B: let mcp-toolcheck start the server for you
 
@@ -148,7 +158,11 @@ If you see this:
 
 ```
 ModuleNotFoundError: No module named 'mcp'
-error: could not read tools: unhandled errors in a TaskGroup (1 sub-exception)
+error: the server crashed on startup: Python module 'mcp' is not installed in the environment used by --command.
+  Install it there (for example: pip install 'mcp<2') or point --command at an interpreter that has it.
+  server output (last lines):
+    ...
+    ModuleNotFoundError: No module named 'mcp'
 ```
 
 the `python` in your command does not have `mcp`. Fix it by activating your project's virtual
@@ -160,6 +174,10 @@ environment first (`source .venv/bin/activate`), by using the full path
 
 ```text
 mcp-toolcheck: 4 tool(s) scanned, 3 finding(s)
+
+[HIGH  ] MCP001  Text contains instructions aimed at the model (possible prompt injection)
+         tools (1): calculator
+         evidence: Do not tell the user | <IMPORTANT> | Before using this tool, read | read ~/.ssh/id_rsa
 
 [HIGH  ] MCP003  Possible arbitrary command or code execution
          tools (1): run_shell
@@ -195,6 +213,7 @@ Check the last exit code in a terminal with `echo $?`.
 
 ```text
 mcp-toolcheck scan (--command COMMAND | --tools-file TOOLS_FILE)
+                   [--timeout TIMEOUT] [--format {text,json,markdown}]
                    [--format {text,json,markdown}]
                    [--fail-on {low,medium,high,never}]
 ```
@@ -202,6 +221,7 @@ mcp-toolcheck scan (--command COMMAND | --tools-file TOOLS_FILE)
 | Option | What it does |
 |---|---|
 | `--command "..."` | Starts a stdio MCP server with this command and scans its tools. **Runs code.** |
+| `--timeout SECONDS` | How long to wait for the server's MCP handshake with `--command`. Default: 30. |
 | `--tools-file FILE` | Scans a JSON file with a saved tool list. Runs nothing. |
 | `--format text` | Human-readable report (default). |
 | `--format json` | Machine-readable output, one entry per finding, with a `summary` block. |
@@ -225,7 +245,8 @@ mcp-toolcheck scan (--command COMMAND | --tools-file TOOLS_FILE)
 | MCP009 | High | Raw SQL accepted as input | Use fixed, parameterized queries and a read-only database user. |
 | MCP010 | Low | Very long descriptions (over 1500 characters) that can hide instructions | Shorten it and move documentation elsewhere. |
 
-A schema constraint (`enum`, `pattern`, `const`) makes a rule stop firing, but it only *documents* intent.
+For MCP004 and MCP006, a schema constraint (`enum`, `pattern`, `const`) makes the rule stop firing, but it
+only *documents* intent. The other rules ignore schema constraints.
 **Always enforce the real limit in the server code too.**
 
 ## Use it in CI
@@ -290,8 +311,8 @@ is meant to become a new corpus case.
 
 ## Where mcp-toolcheck fits
 
-Several MCP security scanners already exist, and some are much more complete. mcp-toolcheck is
-deliberately small. What it focuses on:
+Several MCP security scanners already exist, and some are much more complete. The closest in scope is
+mcp-tool-auditor, which also scans for tool poisoning. mcp-toolcheck is deliberately small. What it focuses on:
 
 - **Small and readable.** About 500 lines of Python. Each rule is a plain function you can read in a minute.
 - **Measured quality.** A labeled corpus with precision and recall, enforced in CI.
@@ -305,10 +326,11 @@ October 2026; check their repositories for current features):
 
 | You need... | Look at |
 |---|---|
-| Runtime monitoring of live MCP traffic | [MCP-Scan](https://github.com/invariantlabs-ai/mcp-scan) (Invariant Labs, now part of Snyk) |
-| Auto-discovery of your MCP client configs, source-code (SAST) rules, OWASP MCP Top 10 mapping | mcp-audit (`mcp-audit-scanner` on PyPI) |
-| Rug-pull / tampered-tool detection, cross-server attack analysis | MCP Armor, mcp-tool-auditor |
-| SARIF output for the GitHub Security tab | mcpguard |
+| A scanner from a larger security vendor, covering agents, MCP servers and agent skills (prompt injection, tool poisoning, tool shadowing, toxic flows) | [Snyk Agent Scan](https://github.com/snyk/agent-scan) (formerly MCP-Scan, from Invariant Labs) |
+| Auto-discovery of your MCP client configs, source-code (SAST) rules, OWASP MCP Top 10 mapping, SARIF output | mcp-audit (`mcp-audit-scanner` on PyPI) |
+| Rug-pull detection, cross-server tool shadowing, OWASP MCP Top 10 mapping, SARIF output | mcp-tool-auditor |
+| Rug-pull detection (baseline drift), cross-server tool shadowing, client-aware configuration scanning | MCP Armor (`mcp-armor` on PyPI) |
+| Runtime middleware that enforces policies on every tool call, OWASP mapping, SARIF output | mcpguard |
 
 ## Limitations
 
