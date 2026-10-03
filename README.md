@@ -55,7 +55,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh     # then open a new terminal
 **1. Install the tool** (a PyPI release is planned; for now it installs from GitHub):
 
 ```bash
-uv tool install git+https://github.com/cessadev/mcp-toolcheck
+uv tool install git+https://github.com/cessadev/mcp-toolcheck@v0.1.0
 mcp-toolcheck --help
 ```
 
@@ -63,8 +63,16 @@ No uv? A plain virtual environment works too:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install git+https://github.com/cessadev/mcp-toolcheck
+pip install git+https://github.com/cessadev/mcp-toolcheck@v0.1.0
 ```
+
+No git installed? Install from the release ZIP instead:
+
+```bash
+pip install https://github.com/cessadev/mcp-toolcheck/archive/refs/tags/v0.1.0.zip
+```
+
+Want the latest development version instead of the release? Remove `@v0.1.0` from the URLs above.
 
 **2. Get the demo file and run your first scan:**
 
@@ -77,10 +85,17 @@ mcp-toolcheck scan --tools-file docs/demo-tools.json
 You should see two HIGH findings and one MEDIUM finding, and the command exits with code `1`
 (see [Reading the results](#reading-the-results)). Nothing was executed: `--tools-file` only reads JSON.
 
+Prefer not to clone? Download just the demo file:
+
+```bash
+curl -O https://raw.githubusercontent.com/cessadev/mcp-toolcheck/v0.1.0/docs/demo-tools.json
+mcp-toolcheck scan --tools-file demo-tools.json
+```
+
 **Just want to try it without installing?**
 
 ```bash
-uvx --from git+https://github.com/cessadev/mcp-toolcheck mcp-toolcheck scan --tools-file docs/demo-tools.json
+uvx --from git+https://github.com/cessadev/mcp-toolcheck@v0.1.0 mcp-toolcheck scan --tools-file docs/demo-tools.json
 ```
 
 ## Scanning your own server
@@ -109,6 +124,7 @@ The file is a list of tools. Each tool has a `name`, a `description` and an `inp
 mcp-toolcheck scan --tools-file tools.json
 ```
 
+If you have a server you trust and want to generate that file automatically, save this as
 `dump_tools.py`:
 
 ```python
@@ -134,11 +150,11 @@ print(f"Saved {len(tools)} tools to tools.json")
 Run it with `uv`, which installs mcp-toolcheck (and the `mcp` package it needs) just for this run:
 
 ```bash
-uv run --with git+https://github.com/cessadev/mcp-toolcheck python dump_tools.py
+uv run --with git+https://github.com/cessadev/mcp-toolcheck@v0.1.0 python dump_tools.py
 ```
 
 If your server needs other packages, install mcp-toolcheck inside **your server's own** virtual environment
-(`pip install git+https://github.com/cessadev/mcp-toolcheck`) and run `python dump_tools.py` with that
+(`pip install git+https://github.com/cessadev/mcp-toolcheck@v0.1.0`) and run `python dump_tools.py` with that
 environment active.
 
 ### Option B: let mcp-toolcheck start the server for you
@@ -214,7 +230,6 @@ Check the last exit code in a terminal with `echo $?`.
 ```text
 mcp-toolcheck scan (--command COMMAND | --tools-file TOOLS_FILE)
                    [--timeout TIMEOUT] [--format {text,json,markdown}]
-                   [--format {text,json,markdown}]
                    [--fail-on {low,medium,high,never}]
 ```
 
@@ -266,7 +281,7 @@ jobs:
       - uses: astral-sh/setup-uv@v8.0.0
       - name: Scan the tool list
         run: >
-          uvx --from git+https://github.com/cessadev/mcp-toolcheck
+          uvx --from git+https://github.com/cessadev/mcp-toolcheck@v0.1.0
           mcp-toolcheck scan --tools-file tools.json --fail-on high
 ```
 
@@ -327,9 +342,9 @@ October 2026; check their repositories for current features):
 | You need... | Look at |
 |---|---|
 | A scanner from a larger security vendor, covering agents, MCP servers and agent skills (prompt injection, tool poisoning, tool shadowing, toxic flows) | [Snyk Agent Scan](https://github.com/snyk/agent-scan) (formerly MCP-Scan, from Invariant Labs) |
-| Auto-discovery of your MCP client configs, source-code (SAST) rules, OWASP MCP Top 10 mapping, SARIF output | mcp-audit (`mcp-audit-scanner` on PyPI) |
+| Auto-discovery of your MCP client configs, source-code (SAST) rules, OWASP MCP Top 10 mapping, SARIF output | mcp-audit (package `mcp-audit-scanner`) |
 | Rug-pull detection, cross-server tool shadowing, OWASP MCP Top 10 mapping, SARIF output | mcp-tool-auditor |
-| Rug-pull detection (baseline drift), cross-server tool shadowing, client-aware configuration scanning | MCP Armor (`mcp-armor` on PyPI) |
+| Rug-pull detection (baseline drift), cross-server tool shadowing, client-aware configuration scanning | MCP Armor (package `mcp-armor`) |
 | Runtime middleware that enforces policies on every tool call, OWASP mapping, SARIF output | mcpguard |
 
 ## Limitations
